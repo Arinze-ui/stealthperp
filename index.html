@@ -1,0 +1,1795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StealthPerp — Private Perpetuals on Solana</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #060810;
+    --surface: #0c1020;
+    --surface2: #111827;
+    --border: rgba(99,235,187,0.12);
+    --green: #63EBBB;
+    --green-dim: rgba(99,235,187,0.15);
+    --green-glow: rgba(99,235,187,0.35);
+    --red: #FF5C6A;
+    --red-dim: rgba(255,92,106,0.12);
+    --amber: #F5A623;
+    --text: #E8EDF5;
+    --muted: #5A6478;
+    --muted2: #8899AA;
+    --arc: #9B6DFF;
+    --arc-dim: rgba(155,109,255,0.15);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* NOISE OVERLAY */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.4;
+  }
+
+  /* GRID BACKGROUND */
+  .grid-bg {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(99,235,187,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99,235,187,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* NAV */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    height: 56px;
+    background: rgba(6,8,16,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 17px;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .logo-icon {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--green), var(--arc));
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+
+  .nav-links {
+    display: flex; gap: 28px; list-style: none;
+    align-items: center;
+  }
+
+  .nav-links a {
+    color: var(--muted2);
+    text-decoration: none;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+
+  .nav-links a:hover { color: var(--green); }
+
+  .nav-cta {
+    display: flex; gap: 10px; align-items: center;
+  }
+
+  .btn {
+    padding: 8px 18px;
+    border-radius: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    letter-spacing: 0.04em;
+    transition: all 0.2s;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted2);
+  }
+  .btn-ghost:hover { border-color: var(--green); color: var(--green); }
+
+  .btn-primary {
+    background: var(--green);
+    color: var(--bg);
+    font-weight: 600;
+  }
+  .btn-primary:hover { background: #7fffd4; box-shadow: 0 0 24px var(--green-glow); }
+
+  /* HERO */
+  .hero {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 24px 40px;
+    text-align: center;
+    overflow: hidden;
+  }
+
+  .hero-glow {
+    position: absolute;
+    width: 600px; height: 600px;
+    background: radial-gradient(ellipse, rgba(99,235,187,0.08) 0%, transparent 70%);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -60%);
+    pointer-events: none;
+  }
+
+  .hero-glow2 {
+    position: absolute;
+    width: 400px; height: 400px;
+    background: radial-gradient(ellipse, rgba(155,109,255,0.07) 0%, transparent 70%);
+    top: 60%; left: 30%;
+    pointer-events: none;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--arc-dim);
+    border: 1px solid rgba(155,109,255,0.3);
+    border-radius: 100px;
+    padding: 5px 14px;
+    font-size: 11px;
+    color: var(--arc);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  .badge-dot {
+    width: 6px; height: 6px;
+    background: var(--arc);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .hero h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(42px, 7vw, 88px);
+    line-height: 1.0;
+    letter-spacing: -0.03em;
+    margin-bottom: 12px;
+    animation: fadeUp 0.6s 0.1s ease both;
+  }
+
+  .hero h1 em {
+    font-style: normal;
+    background: linear-gradient(90deg, var(--green), var(--arc));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-sub {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: clamp(18px, 2.5vw, 26px);
+    color: var(--muted2);
+    max-width: 580px;
+    margin: 0 auto 36px;
+    animation: fadeUp 0.6s 0.2s ease both;
+  }
+
+  .hero-actions {
+    display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+    animation: fadeUp 0.6s 0.3s ease both;
+    margin-bottom: 64px;
+  }
+
+  .hero-actions .btn { padding: 12px 28px; font-size: 13px; }
+
+  /* STATS STRIP */
+  .stats-strip {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    overflow: hidden;
+    animation: fadeUp 0.6s 0.4s ease both;
+    flex-wrap: wrap;
+  }
+
+  .stat-item {
+    padding: 18px 32px;
+    border-right: 1px solid var(--border);
+    text-align: left;
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .stat-item:last-child { border-right: none; }
+
+  .stat-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 6px;
+  }
+
+  .stat-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--green);
+  }
+
+  .stat-change {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* MAIN LAYOUT */
+  .main {
+    position: relative;
+    z-index: 1;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  .section-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--green);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-label::before {
+    content: '';
+    display: block;
+    width: 20px; height: 1px;
+    background: var(--green);
+  }
+
+  /* TRADING INTERFACE */
+  .trading-section {
+    padding: 60px 0;
+  }
+
+  .trading-section h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(28px, 4vw, 44px);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+
+  .trading-section p {
+    color: var(--muted2);
+    max-width: 520px;
+    margin-bottom: 40px;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+
+  .trading-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr 280px;
+    gap: 2px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    min-height: 540px;
+  }
+
+  .panel {
+    background: var(--surface);
+    padding: 16px;
+  }
+
+  /* ORDER BOOK */
+  .panel-header {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .privacy-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--arc-dim);
+    border: 1px solid rgba(155,109,255,0.25);
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 9px;
+    color: var(--arc);
+    letter-spacing: 0.06em;
+  }
+
+  .ob-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4px;
+    padding: 3px 0;
+    font-size: 11px;
+    position: relative;
+    cursor: default;
+  }
+
+  .ob-bar {
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    border-radius: 2px;
+    opacity: 0.15;
+    transition: opacity 0.2s;
+  }
+
+  .ob-row:hover .ob-bar { opacity: 0.28; }
+
+  .ob-row.ask .ob-bar { background: var(--red); }
+  .ob-row.bid .ob-bar { background: var(--green); }
+  .ob-row.ask .col-price { color: var(--red); }
+  .ob-row.bid .col-price { color: var(--green); }
+
+  .col-price { font-weight: 500; position: relative; z-index: 1; }
+  .col-size { color: var(--muted2); text-align: right; position: relative; z-index: 1; }
+  .col-total { color: var(--muted); text-align: right; position: relative; z-index: 1; }
+
+  .ob-spread {
+    padding: 8px 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    margin: 6px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .spread-price {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--green);
+  }
+
+  /* CHART AREA */
+  .chart-panel {
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chart-topbar {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .pair-select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .pair-icon {
+    display: flex;
+    gap: -4px;
+  }
+
+  .coin-circle {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1.5px solid var(--bg);
+  }
+
+  .price-display {
+    margin-left: auto;
+    text-align: right;
+  }
+
+  .price-main {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--green);
+  }
+
+  .price-change {
+    font-size: 11px;
+    color: var(--green);
+  }
+
+  .price-change.neg { color: var(--red); }
+
+  .timeframe-tabs {
+    display: flex; gap: 2px;
+    margin-left: 16px;
+  }
+
+  .tf-tab {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    cursor: pointer;
+    color: var(--muted);
+    transition: all 0.15s;
+    letter-spacing: 0.05em;
+  }
+
+  .tf-tab.active {
+    background: var(--green-dim);
+    color: var(--green);
+  }
+
+  .tf-tab:hover:not(.active) { color: var(--text); }
+
+  /* FAKE CHART */
+  .chart-area {
+    flex: 1;
+    position: relative;
+    padding: 16px;
+    min-height: 300px;
+  }
+
+  .chart-svg {
+    width: 100%; height: 100%;
+    position: absolute;
+    inset: 0;
+  }
+
+  .privacy-overlay {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(155,109,255,0.08);
+    border: 1px solid rgba(155,109,255,0.2);
+    border-radius: 8px;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    color: var(--arc);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+
+  .lock-icon {
+    width: 14px; height: 14px;
+    border: 1.5px solid var(--arc);
+    border-radius: 3px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ORDER PANEL */
+  .order-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .side-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  .side-tab {
+    padding: 9px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.04em;
+  }
+
+  .side-tab.long { background: var(--green-dim); color: var(--green); }
+  .side-tab.short { color: var(--muted); }
+  .side-tab.short:hover { color: var(--red); }
+
+  .order-type-tabs {
+    display: flex; gap: 2px;
+  }
+
+  .ot-tab {
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 10px;
+    cursor: pointer;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+  }
+
+  .ot-tab.active {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .input-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .input-label span { color: var(--muted2); }
+
+  .input-field {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 9px 12px;
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: text;
+    transition: border-color 0.15s;
+  }
+
+  .input-field:hover { border-color: rgba(99,235,187,0.25); }
+  .input-field.active { border-color: var(--green); }
+
+  .input-unit { color: var(--muted); font-size: 11px; }
+
+  .leverage-slider {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 9px 12px;
+  }
+
+  .lev-top {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 11px;
+  }
+
+  .lev-value {
+    color: var(--amber);
+    font-weight: 600;
+  }
+
+  .slider-track {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    position: relative;
+  }
+
+  .slider-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 35%;
+    background: linear-gradient(90deg, var(--green), var(--amber));
+    border-radius: 2px;
+  }
+
+  .slider-thumb {
+    position: absolute;
+    width: 12px; height: 12px;
+    background: var(--amber);
+    border-radius: 50%;
+    top: 50%; left: 35%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 8px rgba(245,166,35,0.5);
+  }
+
+  .lev-marks {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 9px;
+    color: var(--muted);
+  }
+
+  .info-rows {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 7px 12px;
+    font-size: 11px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .info-row:last-child { border-bottom: none; }
+  .info-row .key { color: var(--muted); }
+  .info-row .val { color: var(--text); }
+  .info-row .val.green { color: var(--green); }
+  .info-row .val.arc { color: var(--arc); }
+
+  .arcium-note {
+    background: var(--arc-dim);
+    border: 1px solid rgba(155,109,255,0.2);
+    border-radius: 6px;
+    padding: 9px 12px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .arcium-note-icon {
+    width: 16px; height: 16px;
+    background: rgba(155,109,255,0.3);
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .arcium-note-text {
+    font-size: 10px;
+    color: rgba(155,109,255,0.9);
+    line-height: 1.6;
+  }
+
+  .arcium-note-text strong {
+    display: block;
+    color: var(--arc);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+
+  .submit-btn {
+    width: 100%;
+    padding: 13px;
+    background: var(--green);
+    color: var(--bg);
+    border: none;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .submit-btn:hover {
+    background: #7fffd4;
+    box-shadow: 0 0 32px var(--green-glow);
+    transform: translateY(-1px);
+  }
+
+  /* POSITIONS TABLE */
+  .positions-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 2px;
+  }
+
+  .pos-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .pos-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .tab-row {
+    display: flex;
+    gap: 0;
+  }
+
+  .pos-tab {
+    padding: 5px 14px;
+    font-size: 11px;
+    cursor: pointer;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    letter-spacing: 0.04em;
+  }
+
+  .pos-tab.active {
+    color: var(--green);
+    border-bottom-color: var(--green);
+  }
+
+  .positions-table { width: 100%; border-collapse: collapse; }
+
+  .positions-table th {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    padding: 8px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-weight: 400;
+  }
+
+  .positions-table td {
+    padding: 10px 16px;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(99,235,187,0.04);
+    vertical-align: middle;
+  }
+
+  .positions-table tr:last-child td { border-bottom: none; }
+  .positions-table tr:hover td { background: rgba(99,235,187,0.02); }
+
+  .pos-pair { font-weight: 600; color: var(--text); }
+  .pos-side-long {
+    background: var(--green-dim);
+    color: var(--green);
+    border: 1px solid rgba(99,235,187,0.2);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+  }
+  .pos-side-short {
+    background: var(--red-dim);
+    color: var(--red);
+    border: 1px solid rgba(255,92,106,0.2);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+  }
+
+  .pos-pnl-pos { color: var(--green); font-weight: 600; }
+  .pos-pnl-neg { color: var(--red); font-weight: 600; }
+
+  .private-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--arc);
+    font-size: 11px;
+  }
+
+  .lock-dot {
+    width: 8px; height: 8px;
+    background: var(--arc-dim);
+    border: 1px solid var(--arc);
+    border-radius: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 6px;
+  }
+
+  .close-btn {
+    background: var(--red-dim);
+    border: 1px solid rgba(255,92,106,0.2);
+    color: var(--red);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 10px;
+    cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace;
+    transition: all 0.15s;
+    letter-spacing: 0.04em;
+  }
+  .close-btn:hover { background: rgba(255,92,106,0.25); }
+
+  /* HOW IT WORKS */
+  .how-section {
+    padding: 80px 0;
+  }
+
+  .how-section h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(28px, 4vw, 44px);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+
+  .how-section > p {
+    color: var(--muted2);
+    max-width: 540px;
+    margin-bottom: 48px;
+    line-height: 1.8;
+  }
+
+  .how-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .how-card {
+    background: var(--surface);
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.2s;
+  }
+
+  .how-card:hover { background: var(--surface2); }
+
+  .how-num {
+    font-family: 'Syne', sans-serif;
+    font-size: 64px;
+    font-weight: 800;
+    color: rgba(99,235,187,0.05);
+    position: absolute;
+    top: -10px; right: 16px;
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  .how-icon {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    margin-bottom: 16px;
+  }
+
+  .how-icon.green { background: var(--green-dim); }
+  .how-icon.arc { background: var(--arc-dim); }
+  .how-icon.amber { background: rgba(245,166,35,0.12); }
+
+  .how-card h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+
+  .how-card p {
+    color: var(--muted2);
+    font-size: 12px;
+    line-height: 1.8;
+  }
+
+  /* ARCIUM EXPLAINER */
+  .arc-section {
+    padding: 80px 0;
+  }
+
+  .arc-card {
+    background: var(--surface);
+    border: 1px solid rgba(155,109,255,0.2);
+    border-radius: 16px;
+    padding: 48px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .arc-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--arc), transparent);
+  }
+
+  .arc-card-glow {
+    position: absolute;
+    width: 400px; height: 300px;
+    background: radial-gradient(ellipse, rgba(155,109,255,0.07) 0%, transparent 70%);
+    top: -100px; right: -100px;
+    pointer-events: none;
+  }
+
+  .arc-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 60px;
+    position: relative;
+  }
+
+  .arc-inner h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(24px, 3vw, 36px);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+  }
+
+  .arc-inner h2 em {
+    font-style: normal;
+    color: var(--arc);
+  }
+
+  .arc-inner p {
+    color: var(--muted2);
+    font-size: 12px;
+    line-height: 1.9;
+    margin-bottom: 12px;
+  }
+
+  .arc-features {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .arc-feat {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+
+  .arc-feat-icon {
+    width: 32px; height: 32px;
+    border-radius: 6px;
+    background: var(--arc-dim);
+    border: 1px solid rgba(155,109,255,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .arc-feat-text h4 {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 3px;
+  }
+
+  .arc-feat-text p {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.7;
+    margin: 0;
+  }
+
+  /* FLOW DIAGRAM */
+  .flow-diagram {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    font-size: 11px;
+  }
+
+  .flow-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+
+  .flow-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .flow-step {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    position: relative;
+  }
+
+  .flow-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    flex-shrink: 0;
+  }
+
+  .flow-dot {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    flex-shrink: 0;
+    border: 1.5px solid;
+  }
+
+  .flow-dot.user { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+  .flow-dot.arc { background: var(--arc-dim); border-color: var(--arc); color: var(--arc); }
+  .flow-dot.chain { background: rgba(245,166,35,0.12); border-color: var(--amber); color: var(--amber); }
+
+  .flow-line {
+    width: 1.5px;
+    flex: 1;
+    min-height: 20px;
+    background: var(--border);
+    margin: 2px 0;
+  }
+
+  .flow-content {
+    padding-bottom: 20px;
+    padding-top: 2px;
+  }
+
+  .flow-step-title {
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 2px;
+    font-size: 12px;
+  }
+
+  .flow-step-desc {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.7;
+  }
+
+  /* FOOTER */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 40px 24px;
+    position: relative;
+    z-index: 1;
+    max-width: 1280px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .footer-brand {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  .footer-brand span { color: var(--green); }
+
+  .footer-links {
+    display: flex; gap: 20px;
+  }
+
+  .footer-links a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    transition: color 0.15s;
+  }
+
+  .footer-links a:hover { color: var(--green); }
+
+  .arcium-credit {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .arcium-credit span { color: var(--arc); }
+
+  /* TICKER STRIP */
+  .ticker-strip {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+    padding: 10px 0;
+  }
+
+  .ticker-inner {
+    display: flex;
+    gap: 48px;
+    animation: ticker 20s linear infinite;
+    width: max-content;
+  }
+
+  @keyframes ticker {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  .ticker-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .ticker-pair { font-weight: 600; color: var(--text); }
+  .ticker-price { color: var(--muted2); }
+  .ticker-up { color: var(--green); font-size: 10px; }
+  .ticker-down { color: var(--red); font-size: 10px; }
+  .ticker-sep { color: var(--border); }
+
+  @media (max-width: 900px) {
+    .trading-grid { grid-template-columns: 1fr; }
+    .arc-inner { grid-template-columns: 1fr; gap: 32px; }
+    nav .nav-links { display: none; }
+    .arc-card { padding: 28px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">
+    <div class="logo-icon">🔒</div>
+    StealthPerp
+  </a>
+  <ul class="nav-links">
+    <li><a href="#trade">Trade</a></li>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#arcium">Arcium</a></li>
+    <li><a href="https://github.com" target="_blank">GitHub ↗</a></li>
+  </ul>
+  <div class="nav-cta">
+    <button class="btn btn-ghost">Testnet</button>
+    <button class="btn btn-primary">Connect Wallet</button>
+  </div>
+</nav>
+
+<!-- TICKER -->
+<div class="ticker-strip" style="margin-top:56px;">
+  <div class="ticker-inner">
+    <div class="ticker-item"><span class="ticker-pair">SOL-PERP</span><span class="ticker-price">$178.42</span><span class="ticker-up">+3.21%</span></div>
+    <div class="ticker-item ticker-sep">·</div>
+    <div class="ticker-item"><span class="ticker-pair">BTC-PERP</span><span class="ticker-price">$97,441</span><span class="ticker-up">+1.07%</span></div>
+    <div class="ticker-item ticker-sep">·</div>
+    <div class="ticker-item"><span class="ticker-pair">ETH-PERP</span><span class="ticker-price">$3,218</span><span class="ticker-down">-0.44%</span></div>
+    <div class="ticker-item ticker-sep">·</div>
+    <div class="ticker-item"><span class="ticker-pair">WIF-PERP</span><span class="ticker-price">$2.87</span><span class="ticker-up">+8.62%</span></div>
+    <div class="ticker-item ticker-sep">·</div>
+    <div class="ticker-item"><span class="ticker-pair">JUP-PERP</span><span class="ticker-price">$0.912</span><span class="ticker-down">-1.33%</span></div>
+    <div class="ticker-item ticker-sep">·</div>
+    <div class="ticker-item"><span class="ticker-pair">BONK-PERP</span><span class="ticker-price">$0.0000287</span><span class="ticker-up">+5.94%</span></div>
+    <div class="ticker-item ticker-sep">·</div>
+    <!-- repeat for infinite scroll -->
+    <div class="ticker-item"><span class="ticker-pair">SOL-PERP</span><span class="ticker-price">$178.42</span><span class="ticker-up">+3.21%</span></div>
+    <div class="ticker-item ticker-sep">·</div>
+    <div class="ticker-item"><span class="ticker-pair">BTC-PERP</span><span class="ticker-price">$97,441</span><span class="ticker-up">+1.07%</span></div>
+    <div class="ticker-item ticker-sep">·</div>
+    <div class="ticker-item"><span class="ticker-pair">ETH-PERP</span><span class="ticker-price">$3,218</span><span class="ticker-down">-0.44%</span></div>
+    <div class="ticker-item ticker-sep">·</div>
+    <div class="ticker-item"><span class="ticker-pair">WIF-PERP</span><span class="ticker-price">$2.87</span><span class="ticker-up">+8.62%</span></div>
+    <div class="ticker-item ticker-sep">·</div>
+    <div class="ticker-item"><span class="ticker-pair">JUP-PERP</span><span class="ticker-price">$0.912</span><span class="ticker-down">-1.33%</span></div>
+    <div class="ticker-item ticker-sep">·</div>
+    <div class="ticker-item"><span class="ticker-pair">BONK-PERP</span><span class="ticker-price">$0.0000287</span><span class="ticker-up">+5.94%</span></div>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-glow2"></div>
+  <div class="badge">
+    <div class="badge-dot"></div>
+    Powered by Arcium Confidential Computing · Solana
+  </div>
+  <h1>Trade Perps.<br><em>Stay Private.</em></h1>
+  <p class="hero-sub">Your positions, orders, and liquidation thresholds are encrypted — only your PnL is ever revealed.</p>
+  <div class="hero-actions">
+    <button class="btn btn-primary" onclick="document.getElementById('trade').scrollIntoView({behavior:'smooth'})">Start Trading →</button>
+    <button class="btn btn-ghost" onclick="document.getElementById('arcium').scrollIntoView({behavior:'smooth'})">How Arcium Works</button>
+  </div>
+  <div class="stats-strip">
+    <div class="stat-item">
+      <div class="stat-label">Open Interest</div>
+      <div class="stat-value">$4.2M</div>
+      <div class="stat-change">↑ 18% this week</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">24h Volume</div>
+      <div class="stat-value">$891K</div>
+      <div class="stat-change">Testnet</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Private Positions</div>
+      <div class="stat-value">1,204</div>
+      <div class="stat-change">Arcium MPC active</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Markets</div>
+      <div class="stat-value">12</div>
+      <div class="stat-change">Perp pairs</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-label">Max Leverage</div>
+      <div class="stat-value">50×</div>
+      <div class="stat-change">All pairs</div>
+    </div>
+  </div>
+</section>
+
+<!-- TRADING INTERFACE -->
+<div class="main">
+  <section class="trading-section" id="trade">
+    <div class="section-label">Live Interface</div>
+    <h2>Private Order Book.<br>Zero Alpha Leakage.</h2>
+    <p>Orders are processed inside Arcium's encrypted multiparty computation clusters. No participant — not even the protocol — can see your position size or entry until settlement.</p>
+
+    <div class="trading-grid">
+      <!-- ORDER BOOK -->
+      <div class="panel">
+        <div class="panel-header">
+          Order Book — SOL-PERP
+          <div class="privacy-badge">🔒 PRIVATE MPC</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;padding:4px 0;font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);border-bottom:1px solid var(--border);margin-bottom:8px;">
+          <span>Price</span><span style="text-align:right">Size</span><span style="text-align:right">Total</span>
+        </div>
+
+        <!-- ASKS -->
+        <div class="ob-row ask"><span class="col-price">179.44</span><span class="col-size">2,841</span><span class="col-total">18.4K</span><div class="ob-bar" style="width:82%"></div></div>
+        <div class="ob-row ask"><span class="col-price">179.21</span><span class="col-size">1,204</span><span class="col-total">15.5K</span><div class="ob-bar" style="width:68%"></div></div>
+        <div class="ob-row ask"><span class="col-price">179.08</span><span class="col-size">4,021</span><span class="col-total">14.3K</span><div class="ob-bar" style="width:55%"></div></div>
+        <div class="ob-row ask"><span class="col-price">178.97</span><span class="col-size">892</span><span class="col-total">10.2K</span><div class="ob-bar" style="width:42%"></div></div>
+        <div class="ob-row ask"><span class="col-price">178.83</span><span class="col-size">2,104</span><span class="col-total">9.3K</span><div class="ob-bar" style="width:30%"></div></div>
+        <div class="ob-row ask"><span class="col-price">178.71</span><span class="col-size">601</span><span class="col-total">7.1K</span><div class="ob-bar" style="width:18%"></div></div>
+
+        <div class="ob-spread">
+          <span>Spread 0.029%</span>
+          <div class="spread-price">178.64</div>
+          <span>Best Bid</span>
+        </div>
+
+        <!-- BIDS -->
+        <div class="ob-row bid"><span class="col-price">178.58</span><span class="col-size">3,419</span><span class="col-total">20.1K</span><div class="ob-bar" style="width:88%"></div></div>
+        <div class="ob-row bid"><span class="col-price">178.40</span><span class="col-size">1,882</span><span class="col-total">16.6K</span><div class="ob-bar" style="width:72%"></div></div>
+        <div class="ob-row bid"><span class="col-price">178.21</span><span class="col-size">4,711</span><span class="col-total">14.7K</span><div class="ob-bar" style="width:60%"></div></div>
+        <div class="ob-row bid"><span class="col-price">178.04</span><span class="col-size">987</span><span class="col-total">9.9K</span><div class="ob-bar" style="width:45%"></div></div>
+        <div class="ob-row bid"><span class="col-price">177.89</span><span class="col-size">2,340</span><span class="col-total">8.9K</span><div class="ob-bar" style="width:32%"></div></div>
+        <div class="ob-row bid"><span class="col-price">177.72</span><span class="col-size">712</span><span class="col-total">6.5K</span><div class="ob-bar" style="width:20%"></div></div>
+
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);">
+          ⚠ Aggregated depths only — individual orders are encrypted by Arcium MPC
+        </div>
+      </div>
+
+      <!-- CHART -->
+      <div class="chart-panel">
+        <div class="chart-topbar">
+          <div class="pair-select">
+            <div class="pair-icon">
+              <div class="coin-circle" style="background:#9945FF;color:#fff;">S</div>
+            </div>
+            SOL-PERP ▾
+          </div>
+          <div class="timeframe-tabs">
+            <div class="tf-tab">1m</div>
+            <div class="tf-tab">5m</div>
+            <div class="tf-tab active">1H</div>
+            <div class="tf-tab">4H</div>
+            <div class="tf-tab">1D</div>
+          </div>
+          <div class="price-display" style="margin-left:auto">
+            <div class="price-main">$178.64</div>
+            <div class="price-change">+3.21% ↑</div>
+          </div>
+        </div>
+
+        <div class="chart-area">
+          <svg class="chart-svg" viewBox="0 0 600 260" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#63EBBB" stop-opacity="0.15"/>
+                <stop offset="100%" stop-color="#63EBBB" stop-opacity="0"/>
+              </linearGradient>
+              <linearGradient id="arcLine" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#9B6DFF" stop-opacity="0.4"/>
+                <stop offset="100%" stop-color="#9B6DFF" stop-opacity="0.1"/>
+              </linearGradient>
+            </defs>
+            <!-- Grid lines -->
+            <line x1="0" y1="52" x2="600" y2="52" stroke="rgba(99,235,187,0.05)" stroke-width="1"/>
+            <line x1="0" y1="104" x2="600" y2="104" stroke="rgba(99,235,187,0.05)" stroke-width="1"/>
+            <line x1="0" y1="156" x2="600" y2="156" stroke="rgba(99,235,187,0.05)" stroke-width="1"/>
+            <line x1="0" y1="208" x2="600" y2="208" stroke="rgba(99,235,187,0.05)" stroke-width="1"/>
+            <!-- Price area fill -->
+            <path d="M0,180 C30,175 60,185 90,170 C120,155 140,140 170,138 C200,136 220,145 250,130 C280,115 300,120 330,108 C360,96 380,105 410,90 C440,75 460,80 490,68 C520,56 560,58 600,52 L600,260 L0,260 Z" fill="url(#chartFill)"/>
+            <!-- Price line -->
+            <path d="M0,180 C30,175 60,185 90,170 C120,155 140,140 170,138 C200,136 220,145 250,130 C280,115 300,120 330,108 C360,96 380,105 410,90 C440,75 460,80 490,68 C520,56 560,58 600,52" fill="none" stroke="#63EBBB" stroke-width="2"/>
+            <!-- Liquidation zone hint (private) -->
+            <rect x="0" y="190" width="600" height="40" fill="url(#arcLine)" rx="0"/>
+            <text x="10" y="214" fill="#9B6DFF" font-size="9" font-family="IBM Plex Mono" opacity="0.6">🔒 PRIVATE LIQ ZONE — ENCRYPTED BY ARCIUM</text>
+            <!-- Current price line -->
+            <line x1="0" y1="52" x2="600" y2="52" stroke="#63EBBB" stroke-width="1" stroke-dasharray="4,4" opacity="0.5"/>
+            <text x="4" y="48" fill="#63EBBB" font-size="9" font-family="IBM Plex Mono">178.64</text>
+          </svg>
+
+          <div class="privacy-overlay">
+            <div class="lock-icon">🔒</div>
+            Position sizes &amp; liquidation prices encrypted via Arcium MPC
+          </div>
+        </div>
+      </div>
+
+      <!-- ORDER FORM -->
+      <div class="panel order-panel">
+        <div class="side-tabs">
+          <div class="side-tab long">LONG</div>
+          <div class="side-tab short">SHORT</div>
+        </div>
+
+        <div class="order-type-tabs">
+          <div class="ot-tab active">Market</div>
+          <div class="ot-tab">Limit</div>
+          <div class="ot-tab">TP/SL</div>
+        </div>
+
+        <div class="input-group">
+          <div class="input-label">Size <span>Balance: 240.00 USDC</span></div>
+          <div class="input-field active">
+            <span>100.00</span>
+            <span class="input-unit">USDC</span>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <div class="input-label">Market Price <span>≈ $178.64</span></div>
+          <div class="input-field">
+            <span>Market</span>
+            <span class="input-unit">SOL</span>
+          </div>
+        </div>
+
+        <div class="leverage-slider">
+          <div class="lev-top">
+            <span style="color:var(--muted);font-size:11px;">Leverage</span>
+            <span class="lev-value">10×</span>
+          </div>
+          <div class="slider-track">
+            <div class="slider-fill"></div>
+            <div class="slider-thumb"></div>
+          </div>
+          <div class="lev-marks">
+            <span>1×</span><span>10×</span><span>20×</span><span>35×</span><span>50×</span>
+          </div>
+        </div>
+
+        <div class="info-rows">
+          <div class="info-row">
+            <span class="key">Position Size</span>
+            <span class="val">$1,000.00</span>
+          </div>
+          <div class="info-row">
+            <span class="key">Entry Price</span>
+            <span class="val">$178.64</span>
+          </div>
+          <div class="info-row">
+            <span class="key">Liq. Price</span>
+            <span class="val arc">🔒 Private</span>
+          </div>
+          <div class="info-row">
+            <span class="key">Fees (0.05%)</span>
+            <span class="val">$0.50</span>
+          </div>
+          <div class="info-row">
+            <span class="key">PnL Reveal</span>
+            <span class="val green">On Settlement</span>
+          </div>
+        </div>
+
+        <div class="arcium-note">
+          <div class="arcium-note-icon">⚡</div>
+          <div class="arcium-note-text">
+            <strong>Arcium MPC Active</strong>
+            Your position, entry, and liquidation threshold are encrypted. Only final PnL is revealed at settlement — never your strategy.
+          </div>
+        </div>
+
+        <button class="submit-btn">OPEN LONG POSITION</button>
+      </div>
+    </div>
+
+    <!-- POSITIONS TABLE -->
+    <div class="positions-panel" style="margin-top:2px;">
+      <div class="pos-header">
+        <div class="tab-row">
+          <div class="pos-tab active">Positions (3)</div>
+          <div class="pos-tab">Orders (2)</div>
+          <div class="pos-tab">History</div>
+        </div>
+        <div class="pos-title">
+          <div class="privacy-badge">🔒 DETAILS ENCRYPTED BY ARCIUM</div>
+        </div>
+      </div>
+      <table class="positions-table">
+        <thead>
+          <tr>
+            <th>Market</th>
+            <th>Side</th>
+            <th>Size</th>
+            <th>Entry Price</th>
+            <th>Mark Price</th>
+            <th>Liq. Price</th>
+            <th>Margin</th>
+            <th>PnL</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="pos-pair">SOL-PERP</span></td>
+            <td><span class="pos-side-long">LONG</span></td>
+            <td><span class="private-field"><span class="lock-dot">🔒</span> MPC-sealed</span></td>
+            <td><span class="private-field"><span class="lock-dot">🔒</span> MPC-sealed</span></td>
+            <td>$178.64</td>
+            <td><span class="private-field"><span class="lock-dot">🔒</span> MPC-sealed</span></td>
+            <td><span class="private-field"><span class="lock-dot">🔒</span> MPC-sealed</span></td>
+            <td><span class="pos-pnl-pos">+$214.80</span></td>
+            <td><button class="close-btn">Close</button></td>
+          </tr>
+          <tr>
+            <td><span class="pos-pair">BTC-PERP</span></td>
+            <td><span class="pos-side-short">SHORT</span></td>
+            <td><span class="private-field"><span class="lock-dot">🔒</span> MPC-sealed</span></td>
+            <td><span class="private-field"><span class="lock-dot">🔒</span> MPC-sealed</span></td>
+            <td>$97,441</td>
+            <td><span class="private-field"><span class="lock-dot">🔒</span> MPC-sealed</span></td>
+            <td><span class="private-field"><span class="lock-dot">🔒</span> MPC-sealed</span></td>
+            <td><span class="pos-pnl-neg">-$88.40</span></td>
+            <td><button class="close-btn">Close</button></td>
+          </tr>
+          <tr>
+            <td><span class="pos-pair">ETH-PERP</span></td>
+            <td><span class="pos-side-long">LONG</span></td>
+            <td><span class="private-field"><span class="lock-dot">🔒</span> MPC-sealed</span></td>
+            <td><span class="private-field"><span class="lock-dot">🔒</span> MPC-sealed</span></td>
+            <td>$3,218</td>
+            <td><span class="private-field"><span class="lock-dot">🔒</span> MPC-sealed</span></td>
+            <td><span class="private-field"><span class="lock-dot">🔒</span> MPC-sealed</span></td>
+            <td><span class="pos-pnl-pos">+$52.10</span></td>
+            <td><button class="close-btn">Close</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how-section" id="how">
+    <div class="section-label">Architecture</div>
+    <h2>How StealthPerp<br>protects traders.</h2>
+    <p>Traditional perp DEXs write positions on-chain in plaintext — exposing every trader to copy-trading bots, front-runners, and targeted liquidation hunters. StealthPerp eliminates these attack vectors entirely.</p>
+
+    <div class="how-grid">
+      <div class="how-card">
+        <div class="how-num">01</div>
+        <div class="how-icon green">📡</div>
+        <h3>Encrypted Order Submission</h3>
+        <p>When you submit an order, your size, direction, and price are encrypted client-side using Arcium's threshold encryption before they ever touch the network. The plaintext never leaves your browser.</p>
+      </div>
+      <div class="how-card">
+        <div class="how-num">02</div>
+        <div class="how-icon arc">⚡</div>
+        <h3>MPC Matching & Liquidation</h3>
+        <p>Arcium's Multiparty Computation clusters match orders and compute liquidation thresholds over ciphertexts. No single node — not even Arcium — can reconstruct your position. Checks happen privately.</p>
+      </div>
+      <div class="how-card">
+        <div class="how-num">03</div>
+        <div class="how-icon amber">🔓</div>
+        <h3>PnL-Only Settlement</h3>
+        <p>When your position closes, only the net PnL value is decrypted and settled on-chain to Solana. The original size, entry price, and liquidation level are never exposed — not even retroactively.</p>
+      </div>
+      <div class="how-card">
+        <div class="how-num">04</div>
+        <div class="how-icon green">🌊</div>
+        <h3>Deeper Liquidity</h3>
+        <p>Because large traders are no longer exposed to front-running or targeted liquidations, they deploy bigger positions with confidence. Privacy directly enables deeper, more efficient markets for everyone.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ARCIUM EXPLAINER -->
+  <section class="arc-section" id="arcium">
+    <div class="arc-card">
+      <div class="arc-card-glow"></div>
+      <div class="arc-inner">
+        <div>
+          <div class="section-label">Arcium Integration</div>
+          <h2>Confidential<br>computing for<br><em>DeFi primitives</em></h2>
+          <p>Arcium is a parallelized confidential computing network built on Solana. It enables arbitrary computation over encrypted data — meaning smart contracts can perform logic without ever seeing the inputs.</p>
+          <p>StealthPerp uses Arcium's MXE (Multiparty Execution) environment to run the three most privacy-critical operations: order matching, margin calculation, and liquidation threshold checking — all over sealed ciphertexts.</p>
+          <p>The result is a DEX where the protocol is mathematically prevented from leaking trader intent — not just promised not to.</p>
+        </div>
+
+        <div>
+          <div class="flow-diagram">
+            <div class="flow-title">Privacy Flow — Trade Lifecycle</div>
+            <div class="flow-steps">
+              <div class="flow-step">
+                <div class="flow-left">
+                  <div class="flow-dot user">U</div>
+                  <div class="flow-line"></div>
+                </div>
+                <div class="flow-content">
+                  <div class="flow-step-title">User submits encrypted order</div>
+                  <div class="flow-step-desc">Position size, direction &amp; price are Arcium threshold-encrypted in the browser. Ciphertext posted to Solana program.</div>
+                </div>
+              </div>
+              <div class="flow-step">
+                <div class="flow-left">
+                  <div class="flow-dot arc">A</div>
+                  <div class="flow-line"></div>
+                </div>
+                <div class="flow-content">
+                  <div class="flow-step-title">Arcium MPC cluster processes order</div>
+                  <div class="flow-step-desc">3-of-5 MPC nodes jointly compute order matching, margin check, and liquidation price — operating entirely on ciphertexts. Zero plaintext exposure.</div>
+                </div>
+              </div>
+              <div class="flow-step">
+                <div class="flow-left">
+                  <div class="flow-dot chain">S</div>
+                  <div class="flow-line"></div>
+                </div>
+                <div class="flow-content">
+                  <div class="flow-step-title">Position opened on Solana</div>
+                  <div class="flow-step-desc">An encrypted position commitment is stored on-chain. Mark price &amp; oracle data are public; all sensitive fields remain sealed.</div>
+                </div>
+              </div>
+              <div class="flow-step">
+                <div class="flow-left">
+                  <div class="flow-dot arc">A</div>
+                  <div class="flow-line"></div>
+                </div>
+                <div class="flow-content">
+                  <div class="flow-step-title">Liquidation checked privately</div>
+                  <div class="flow-step-desc">Arcium continuously evaluates encrypted margin ratios against oracle prices. Liquidation fires without ever revealing the threshold price publicly.</div>
+                </div>
+              </div>
+              <div class="flow-step">
+                <div class="flow-left">
+                  <div class="flow-dot user">U</div>
+                </div>
+                <div class="flow-content" style="padding-bottom:0">
+                  <div class="flow-step-title">Only PnL revealed at settlement</div>
+                  <div class="flow-step-desc">On close, Arcium decrypts only the net profit/loss and settles USDC on Solana. Entry price, position size &amp; liq price remain encrypted forever.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;" class="arc-features">
+            <div class="arc-feat">
+              <div class="arc-feat-icon">🔒</div>
+              <div class="arc-feat-text">
+                <h4>No Copy-Trading Vectors</h4>
+                <p>Position sizes and entries are never on-chain in plaintext, so no bot can mirror your trades.</p>
+              </div>
+            </div>
+            <div class="arc-feat">
+              <div class="arc-feat-icon">🛡️</div>
+              <div class="arc-feat-text">
+                <h4>No Targeted Liquidations</h4>
+                <p>Liquidation thresholds are sealed — attackers cannot calculate and push price to your liq level.</p>
+              </div>
+            </div>
+            <div class="arc-feat">
+              <div class="arc-feat-icon">🌐</div>
+              <div class="arc-feat-text">
+                <h4>Cryptographic Guarantees</h4>
+                <p>Privacy is enforced by MPC math, not platform promises. Even Arcium nodes cannot collude below threshold.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-brand">Stealth<span>Perp</span> — Private Perps on Solana</div>
+  <div class="footer-links">
+    <a href="#">Docs</a>
+    <a href="#">GitHub</a>
+    <a href="#">Discord</a>
+    <a href="#">Arcium ↗</a>
+  </div>
+  <div class="arcium-credit">
+    Confidential computing by <span>Arcium</span>
+  </div>
+</footer>
+
+<script>
+  // Animate order book prices
+  const priceEls = document.querySelectorAll('.col-price');
+  setInterval(() => {
+    priceEls.forEach(el => {
+      const base = parseFloat(el.textContent);
+      const delta = (Math.random() - 0.5) * 0.06;
+      if (!isNaN(base)) {
+        el.textContent = (base + delta).toFixed(2);
+      }
+    });
+  }, 2000);
+
+  // Side tab toggle
+  document.querySelectorAll('.side-tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('.side-tab').forEach(t => {
+        t.className = t.className.replace(' long', '') + '';
+        t.style.cssText = '';
+      });
+      if (this.textContent === 'LONG') {
+        this.style.cssText = 'background:var(--green-dim);color:var(--green)';
+        document.querySelector('.submit-btn').textContent = 'OPEN LONG POSITION';
+        document.querySelector('.submit-btn').style.background = 'var(--green)';
+      } else {
+        this.style.cssText = 'background:var(--red-dim);color:var(--red)';
+        document.querySelector('.submit-btn').textContent = 'OPEN SHORT POSITION';
+        document.querySelector('.submit-btn').style.background = 'var(--red)';
+      }
+    });
+  });
+
+  // TF tab toggle
+  document.querySelectorAll('.tf-tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('.tf-tab').forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+
+  // Order type toggle
+  document.querySelectorAll('.ot-tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('.ot-tab').forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+
+  // Pos tabs
+  document.querySelectorAll('.pos-tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+      document.querySelectorAll('.pos-tab').forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+
+  // Animate PnL counters
+  const pnlEls = document.querySelectorAll('.pos-pnl-pos, .pos-pnl-neg');
+  setInterval(() => {
+    pnlEls.forEach(el => {
+      const isPos = el.classList.contains('pos-pnl-pos');
+      const match = el.textContent.match(/[\d.]+/);
+      if (match) {
+        const base = parseFloat(match[0]);
+        const delta = (Math.random() - 0.45) * 2;
+        const newVal = Math.max(0, base + delta).toFixed(2);
+        el.textContent = (isPos ? '+' : '-') + '$' + newVal;
+      }
+    });
+  }, 1500);
+</script>
+</body>
+</html>
